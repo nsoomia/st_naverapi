@@ -1,0 +1,31 @@
+{
+  "aviation_monthly": [],
+  "aviation_target": [],
+  "city_metrics": [],
+  "rating_distribution": {},
+  "companion_rating": [],
+  "age_distribution": {},
+  "length_by_rating": [],
+  "keywords": {
+    "긍정": [
+      "가이드",
+      "친절",
+      "최고",
+      "만족",
+      "아이",
+      "가족",
+      "식사",
+      "일정"
+    ],
+    "부정": [
+      "대기",
+      "쇼핑",
+      "강요",
+      "지연",
+      "불만",
+      "힘듦",
+      "좁음",
+      "덥다"
+    ]
+  }
+}
