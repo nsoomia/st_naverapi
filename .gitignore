@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+backups/
+*.txt
+*.log
+doc/static_dashboard_guide.md
+check_itinerary_cols.py
+danang_cols.txt
+itinerary_cols.txt
+tour_ticket_cols.txt
+test_bug.py
+test_pd.py
+error.txt
+traceback.txt
+py_err*.txt
