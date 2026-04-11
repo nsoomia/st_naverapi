@@ -17,24 +17,28 @@ DOC_DIR = os.path.join(BASE_DIR, 'docs')
 os.makedirs(IMAGE_DIR, exist_ok=True)
 os.makedirs(DOC_DIR, exist_ok=True)
 
-# 2. 데이터 로드
-def load_data():
+# 2. 데이터 로드 및 필터링
+def load_and_filter_data():
     if not os.path.exists(DATA_PATH):
         raise FileNotFoundError(f"Data file not found at {DATA_PATH}")
     df = pd.read_csv(DATA_PATH, encoding='utf-8-sig')
-    return df
+    
+    # 평점 3점 이하 필터링 (사용자 요청)
+    neg_df = df[df['평점'] <= 3].copy()
+    print(f"전체 {len(df)}건 중 평점 3점 이하 리뷰 {len(neg_df)}건을 대상으로 분석을 진행합니다.")
+    return neg_df
 
 # 3. EDA 및 시각화
 def perform_eda(df):
     plt.figure(figsize=(10, 6))
-    sns.countplot(data=df, x='평점', palette='viridis')
-    plt.title('평점 분포 현황')
+    sns.countplot(data=df, x='평점', palette='Reds_r')
+    plt.title('부정 리뷰(Rating <= 3) 평점 분포')
     plt.savefig(os.path.join(IMAGE_DIR, 'rating_dist.png'))
     plt.close()
 
     plt.figure(figsize=(10, 6))
-    df['대상도시'].value_counts().plot(kind='pie', autopct='%1.1f%%', colors=sns.color_palette('pastel'))
-    plt.title('도시별 리뷰 비중')
+    df['대상도시'].value_counts().plot(kind='pie', autopct='%1.1f%%', colors=sns.color_palette('Reds'))
+    plt.title('부정 리뷰 도시별 비중')
     plt.ylabel('')
     plt.savefig(os.path.join(IMAGE_DIR, 'city_dist.png'))
     plt.close()
@@ -42,6 +46,10 @@ def perform_eda(df):
 # 4. 텍스트 전처리
 def preprocess_text(text):
     text = re.sub(r'[^가-힣\s]', '', str(text))
+    # 특정 시스템 키워드가 포함된 문장 통째로 필터링 (이미 확인된 boilerplate 대응)
+    if '개인정보' in text or '게시판' in text or '블로그' in text:
+        return ""
+        
     STOPWORDS = set(['에서', '하고', '으로', '하는', '입니다', '있습니다', '정말', '너무', '좋아요', '자체가', '같아요', '습니다', '했고', '해서', '있어서', '있는', '있고', '한다', '있다', '것이', '것은', '등의', '한', '때문에', '위한', '대해', '대한', '모든', '통해', '같은', '함께', '전체', '가장', '다양한', '위해', '매우', '진짜', '좀', '그', '건', '들', '이', '가', '은', '는', '도', '를', '을', '의', '에', '와', '과', '나', '다', '로', '고', '지', '아', '오', '요', '이런', '저런', '그런', '하나', '건데', '때', '번', '함께', '보고', '갔는데', '많이', '정말', '매우', '아주', '조금', '특히', '다시', '꼭', '근데', '하지만', '그래도', '그래서', '그런데', '그냥', '조금', '약간', '거의', '모두', '전부', '진짜', '완전', '대박', '진심', '진짜로', '덕분에', '여행', '여행이', '가이드', '가이드가', '패키지', '하나투어', '베트남', '다낭', '시간', '다른', '그리고'])
     words = text.split()
     return " ".join([w for w in words if len(w) >= 2 and w not in STOPWORDS])
@@ -49,7 +57,9 @@ def preprocess_text(text):
 # 5. 토픽 모델링
 def run_modeling(df, n_topics=5):
     df['cleaned'] = df['내용'].apply(preprocess_text)
-    texts = df[df['cleaned'] != '']['cleaned'].tolist()
+    # 빈 문자열 제외
+    valid_df = df[df['cleaned'] != ''].copy()
+    texts = valid_df['cleaned'].tolist()
     
     tfidf_vec = TfidfVectorizer(max_df=0.5, min_df=5, max_features=2000)
     tfidf = tfidf_vec.fit_transform(texts)
@@ -74,58 +84,61 @@ def run_modeling(df, n_topics=5):
     save_keywords(lda, 'lda')
     save_keywords(nmf, 'nmf')
 
-    return lda, lda_output, nmf, nmf_output, feature_names
+    return lda, lda_output, nmf, nmf_output, feature_names, valid_df
 
 # 6. 보고서 생성
-def generate_report(df, lda_output, nmf_output):
-    # 상위 5개 행 확률 결합
-    sample_df = df.head(5).copy()
-    sample_df['내용_요약'] = sample_df['내용'].apply(lambda x: str(x)[:50] + "...")
+def generate_report(valid_df, lda_output, nmf_output):
+    # 전수 데이터 확률 결합
+    full_result = valid_df.copy()
+    full_result['내용_요약'] = full_result['내용'].apply(lambda x: str(x)[:50] + "...")
     
-    # LDA 확률 추가
     for i in range(5):
-        sample_df[f'LDA_Topic_{i+1}'] = lda_output[:5, i]
-        sample_df[f'NMF_Topic_{i+1}'] = nmf_output[:5, i]
+        full_result[f'LDA_Topic_{i+1}'] = lda_output[:, i]
+        full_result[f'NMF_Topic_{i+1}'] = nmf_output[:, i]
+
+    # 전수 결과 저장 (CSV)
+    full_result.to_csv(os.path.join(DOC_DIR, 'negative_review_topic_analysis.csv'), index=False, encoding='utf-8-sig')
 
     # Markdown 작성
-    report_content = f"""# 하나투어 리뷰 통합 분석 보고서
+    report_content = f"""# 하나투어 부정 리뷰(평점 3이하) 통합 분석 보고서
 
 ## 1. 데이터 개요
-- **분석 대상**: 하나투어 다낭/나트랑/싱가포르 리뷰 데이터
-- **총 리뷰 수**: {len(df)}건
+- **분석 대상**: 하나투어 평점 3점 이하 리뷰 전체
+- **총 분석 수**: {len(valid_df)}건
 
-## 2. EDA (Exploratory Data Analysis)
-### 2.1 평점 분포
+## 2. EDA (Exploratory Data Analysis) - 부정 리뷰 중심
+### 2.1 평점 분포 (1-3점)
 ![평점 분포](file:///{os.path.join(IMAGE_DIR, 'rating_dist.png').replace('\\', '/')})
 
-### 2.2 도시별 리뷰 비중
+### 2.2 도시별 부정 리뷰 비중
 ![도시별 비중](file:///{os.path.join(IMAGE_DIR, 'city_dist.png').replace('\\', '/')})
 
 ## 3. 토픽 모델링 결과 요약 (5 Topics)
-- **LDA**: 각 테마별 확률 분포 기반의 클러스터링을 수행함.
-- **NMF**: 행렬 분해 기법을 활용하여 보다 변별력 있는 키워드 셋을 도출함.
-- *상세 키워드 30개는 개별 텍스트 파일(lda_top_30_keywords.txt, nmf_top_30_keywords.txt) 참조.*
+- **부정 리뷰를 5개의 핵심 테마로 분류하였습니다.**
+- 상세 키워드 30개는 `lda_top_30_keywords.txt`, `nmf_top_30_keywords.txt` 파일에 저장되었습니다.
 
-## 4. 리뷰 샘플 및 토픽 확률
+## 4. 리뷰 전수 분석 결과 (상위 20개 샘플 노출)
+*전체 {len(valid_df)}건에 대한 분석 결과는 [negative_review_topic_analysis.csv](./negative_review_topic_analysis.csv)에서 확인하실 수 있습니다.*
+
 """
-    # 표 형태 추가
+    # 표 형태 추가 (상위 20개만 요역 노출)
     cols_to_show = ['내용_요약'] + [f'LDA_Topic_{i+1}' for i in range(5)]
-    report_content += sample_df[cols_to_show].to_markdown(index=False)
+    report_content += full_result[cols_to_show].head(20).to_markdown(index=False)
     
     with open(os.path.join(DOC_DIR, 'eda_report.md'), 'w', encoding='utf8') as f:
         f.write(report_content)
     
-    return sample_df
+    return full_result
 
 if __name__ == "__main__":
-    print("분석을 시작합니다...")
-    df = load_data()
+    print("부정 리뷰 집중 분석을 시작합니다...")
+    df = load_and_filter_data()
     perform_eda(df)
-    lda_model, lda_out, nmf_model, nmf_out, features = run_modeling(df)
-    results_df = generate_report(df, lda_out, nmf_out)
-    print("분석 완료. 보고서 및 키워드 파일이 생성되었습니다.")
+    lda_model, lda_out, nmf_model, nmf_out, features, valid_df = run_modeling(df)
+    results_df = generate_report(valid_df, lda_out, nmf_out)
+    print("분석 완료. 부정 리뷰 전수 분석 결과 및 보고서가 생성되었습니다.")
     
-    # 터미널 출력용 (50자 요약 + 토픽 확률)
-    print("\n=== 상위 5개 행 토픽 모델링 결과 (LDA) ===")
+    # 터미널 출력 (샘플)
+    print("\n=== 부정 리뷰 전수 분석 결과 (상위 5건 샘플) ===")
     cols_out = ['내용_요약'] + [f'LDA_Topic_{i+1}' for i in range(5)]
-    print(results_df[cols_out].to_string(index=False))
+    print(results_df[cols_out].head(5).to_string(index=False))
