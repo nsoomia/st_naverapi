@@ -57,7 +57,6 @@ def preprocess_text(text):
 # 5. 토픽 모델링
 def run_modeling(df, n_topics=5):
     df['cleaned'] = df['내용'].apply(preprocess_text)
-    # 빈 문자열 제외
     valid_df = df[df['cleaned'] != ''].copy()
     texts = valid_df['cleaned'].tolist()
     
@@ -73,7 +72,7 @@ def run_modeling(df, n_topics=5):
     nmf = NMF(n_components=n_topics, random_state=42)
     nmf_output = nmf.fit_transform(tfidf)
 
-    # 상위 키워드 30개 저장
+    # 5.1 상위 키워드 30개 저장
     def save_keywords(model, name):
         with open(os.path.join(BASE_DIR, f'{name}_top_30_keywords.txt'), 'w', encoding='utf8') as f:
             for i, topic in enumerate(model.components_):
@@ -83,12 +82,36 @@ def run_modeling(df, n_topics=5):
 
     save_keywords(lda, 'lda')
     save_keywords(nmf, 'nmf')
+    
+    # 5.2 토픽별 상위 키워드 시각화 (막대 그래프)
+    def plot_top_words(model, feature_names, n_top_words, title, filename_prefix):
+        fig, axes = plt.subplots(1, 5, figsize=(20, 8), sharex=True)
+        axes = axes.flatten()
+        for i, topic in enumerate(model.components_):
+            top_features_ind = topic.argsort()[: -n_top_words - 1 : -1]
+            top_features = [feature_names[idx] for idx in top_features_ind]
+            weights = topic[top_features_ind]
+
+            ax = axes[i]
+            ax.barh(top_features, weights, height=0.7, color='skyblue')
+            ax.set_title(f"Topic {i + 1}", fontdict={"fontsize": 15})
+            ax.invert_yaxis()
+            ax.tick_params(axis="both", which="major", labelsize=12)
+            for j in "top right left".split():
+                ax.spines[j].set_visible(False)
+        
+        fig.suptitle(title, fontsize=25)
+        plt.subplots_adjust(top=0.90, bottom=0.05, wspace=0.90, hspace=0.3)
+        plt.savefig(os.path.join(IMAGE_DIR, f'{filename_prefix}_top_words.png'))
+        plt.close()
+
+    plot_top_words(lda, feature_names, 15, "LDA Topics Top Keywords", "lda")
+    plot_top_words(nmf, feature_names, 15, "NMF Topics Top Keywords", "nmf")
 
     return lda, lda_output, nmf, nmf_output, feature_names, valid_df
 
 # 6. 보고서 생성
 def generate_report(valid_df, lda_output, nmf_output):
-    # 전수 데이터 확률 결합
     full_result = valid_df.copy()
     full_result['내용_요약'] = full_result['내용'].apply(lambda x: str(x)[:50] + "...")
     
@@ -96,10 +119,8 @@ def generate_report(valid_df, lda_output, nmf_output):
         full_result[f'LDA_Topic_{i+1}'] = lda_output[:, i]
         full_result[f'NMF_Topic_{i+1}'] = nmf_output[:, i]
 
-    # 전수 결과 저장 (CSV)
     full_result.to_csv(os.path.join(DOC_DIR, 'negative_review_topic_analysis.csv'), index=False, encoding='utf-8-sig')
 
-    # Markdown 작성
     report_content = f"""# 하나투어 부정 리뷰(평점 3이하) 통합 분석 보고서
 
 ## 1. 데이터 개요
@@ -107,21 +128,23 @@ def generate_report(valid_df, lda_output, nmf_output):
 - **총 분석 수**: {len(valid_df)}건
 
 ## 2. EDA (Exploratory Data Analysis) - 부정 리뷰 중심
-### 2.1 평점 분포 (1-3점)
-![평점 분포](file:///{os.path.join(IMAGE_DIR, 'rating_dist.png').replace('\\', '/')})
+### 2.1 평점 및 도시 분포
+| 평점 분포 | 도시별 비중 |
+|:---:|:---:|
+| ![평점 분포](file:///{os.path.join(IMAGE_DIR, 'rating_dist.png').replace('\\', '/')}) | ![도시별 비중](file:///{os.path.join(IMAGE_DIR, 'city_dist.png').replace('\\', '/')}) |
 
-### 2.2 도시별 부정 리뷰 비중
-![도시별 비중](file:///{os.path.join(IMAGE_DIR, 'city_dist.png').replace('\\', '/')})
+## 3. 토픽 모델링 시각화 (5 Topics)
 
-## 3. 토픽 모델링 결과 요약 (5 Topics)
-- **부정 리뷰를 5개의 핵심 테마로 분류하였습니다.**
-- 상세 키워드 30개는 `lda_top_30_keywords.txt`, `nmf_top_30_keywords.txt` 파일에 저장되었습니다.
+### 3.1 LDA 토픽별 핵심 키워드
+![LDA 토픽 키워드](file:///{os.path.join(IMAGE_DIR, 'lda_top_words.png').replace('\\', '/')})
+
+### 3.2 NMF 토픽별 핵심 키워드
+![NMF 토픽 키워드](file:///{os.path.join(IMAGE_DIR, 'nmf_top_words.png').replace('\\', '/')})
 
 ## 4. 리뷰 전수 분석 결과 (상위 20개 샘플 노출)
 *전체 {len(valid_df)}건에 대한 분석 결과는 [negative_review_topic_analysis.csv](./negative_review_topic_analysis.csv)에서 확인하실 수 있습니다.*
 
 """
-    # 표 형태 추가 (상위 20개만 요역 노출)
     cols_to_show = ['내용_요약'] + [f'LDA_Topic_{i+1}' for i in range(5)]
     report_content += full_result[cols_to_show].head(20).to_markdown(index=False)
     

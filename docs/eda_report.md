@@ -5,15 +5,18 @@
 - **총 분석 수**: 1120건
 
 ## 2. EDA (Exploratory Data Analysis) - 부정 리뷰 중심
-### 2.1 평점 분포 (1-3점)
-![평점 분포](file:///C:/Users/user/ICB6/teamp2/hanatour_mh/images/eda/rating_dist.png)
+### 2.1 평점 및 도시 분포
+| 평점 분포 | 도시별 비중 |
+|:---:|:---:|
+| ![평점 분포](file:///C:/Users/user/ICB6/teamp2/hanatour_mh/images/eda/rating_dist.png) | ![도시별 비중](file:///C:/Users/user/ICB6/teamp2/hanatour_mh/images/eda/city_dist.png) |
 
-### 2.2 도시별 부정 리뷰 비중
-![도시별 비중](file:///C:/Users/user/ICB6/teamp2/hanatour_mh/images/eda/city_dist.png)
+## 3. 토픽 모델링 시각화 (5 Topics)
 
-## 3. 토픽 모델링 결과 요약 (5 Topics)
-- **부정 리뷰를 5개의 핵심 테마로 분류하였습니다.**
-- 상세 키워드 30개는 `lda_top_30_keywords.txt`, `nmf_top_30_keywords.txt` 파일에 저장되었습니다.
+### 3.1 LDA 토픽별 핵심 키워드
+![LDA 토픽 키워드](file:///C:/Users/user/ICB6/teamp2/hanatour_mh/images/eda/lda_top_words.png)
+
+### 3.2 NMF 토픽별 핵심 키워드
+![NMF 토픽 키워드](file:///C:/Users/user/ICB6/teamp2/hanatour_mh/images/eda/nmf_top_words.png)
 
 ## 4. 리뷰 전수 분석 결과 (상위 20개 샘플 노출)
 *전체 1120건에 대한 분석 결과는 [negative_review_topic_analysis.csv](./negative_review_topic_analysis.csv)에서 확인하실 수 있습니다.*
