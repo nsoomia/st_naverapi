@@ -539,12 +539,12 @@ if not df_rv.empty:
                 text = " ".join(df['내용'].astype(str))
                 words = re.findall(r'[가-힣]{2,}', text) 
                 
-                # 단어 통합 및 정규화 (여행이 -> 여행 등)
+                # 단어 통합 및 정규화 (유사어 처리 및 제외)
                 refined_words = []
                 for w in words:
-                    # '여행'으로 시작하는 단어 통합 (단, '여행가다' 등 동사는 배제하고 명사 위주로 단순화)
+                    # '여행' 관련 단어 제외 (요청사항 반영)
                     if w.startswith('여행') and len(w) <= 4: 
-                        refined_words.append('여행')
+                        continue
                     elif w not in STOPWORDS:
                         refined_words.append(w)
                 
@@ -564,6 +564,28 @@ if not df_rv.empty:
                 st.caption(f"'{sel_city_rv}' 리뷰에서 핵심적으로 언급되는 20대 키워드들을 통해 구체적인 고객 만족 및 불만 요소를 파악합니다.")
             else:
                 st.info("분석할 리뷰 텍스트가 부족합니다.")
+
+        # --- [NEW] 부정 키워드 분석 섹션 ---
+        st.markdown("---")
+        st.subheader(f"🧨 {sel_city_rv} 부정 리뷰 집중 분석 (Rating ≤ 3)")
+        
+        df_neg_rv = df_tgt_rv[df_tgt_rv['평점'] <= 3]
+        
+        if not df_neg_rv.empty:
+            neg_keywords = get_top_keywords_refined(df_neg_rv, top_n=10)
+            if neg_keywords:
+                df_neg_kw = pd.DataFrame(neg_keywords, columns=['단어', '빈도'])
+                fig8 = px.bar(df_neg_kw, x='빈도', y='단어', orientation='h', 
+                             color='빈도', color_continuous_scale='Reds',
+                             text_auto=True, title=f"{sel_city_rv} Top 10 Negative Keywords")
+                fig8.update_layout(yaxis={'categoryorder':'total ascending'})
+                fig8.update_yaxes(tickmode='linear')
+                st.plotly_chart(fig8, use_container_width=True)
+                st.info(f"💡 **부정 인사이트:** '{sel_city_rv}' 지역의 부정 리뷰에서 가장 많이 언급된 단어들입니다. 위 키워드들을 중심으로 현지 서비스 및 일정 품질 개선이 필요합니다.")
+            else:
+                st.info("부정 리뷰에서 추출된 유효 키워드가 없습니다.")
+        else:
+            st.success(f"✔️ 해당 조건({sel_city_rv})에서 분석할 부정 리뷰가 없습니다! 전반적인 만족도가 매우 높습니다.")
 
 # 푸터
 st.markdown("---")
